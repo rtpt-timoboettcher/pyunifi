@@ -1,0 +1,86 @@
+#!/usr/bin/env python3
+
+import argparse
+from pyunifi.controller import Controller
+
+import io
+import qrcode
+import base64
+
+
+
+parser = argparse.ArgumentParser()
+parser.add_argument('-c', '--controller', default='unifi', help='the controller address (default "unifi")')
+parser.add_argument('-u', '--username', default='admin', help='the controller username (default("admin")')
+parser.add_argument('-p', '--password', default='', help='the controller password')
+parser.add_argument('-b', '--port', default='8443', help='the controller port (default "8443")')
+parser.add_argument('-v', '--version', default='v5', help='the controller base version (default "v5")')
+parser.add_argument('-s', '--siteid', default='default', help='the site ID, UniFi >=3.x only (default "default")')
+parser.add_argument('-d', '--debug', default=False, help='enable debug output', action='store_true')
+parser.add_argument('-V', '--no-ssl-verify', default=False, action='store_true', help='Don\'t verify ssl certificates')
+parser.add_argument('-C', '--certificate', default='', help='verify with ssl certificate pem file')
+parser.add_argument('-W', '--wifi', default='', help='SSID or ID of wifi')
+parser.add_argument('-t', '--outputtype', default='text', help='output (text, image, html)')
+parser.add_argument('-o', '--output', default='', help='output filename')
+args = parser.parse_args()
+
+ssl_verify = (not args.no_ssl_verify)
+
+if ssl_verify and len(args.certificate) > 0:
+        ssl_verify = args.certificate
+
+if args.debug:
+    import logging
+    logging.basicConfig(level=logging.DEBUG)
+
+c = Controller(args.controller, args.username, args.password, args.port, args.version, args.siteid, ssl_verify=ssl_verify)
+
+ssid = None
+psk = None
+
+wifis = c.get_wifi()
+for wifi in wifis:
+    if args.wifi == wifi["configuration"]["_id"] or args.wifi == wifi["configuration"]["name"]:
+        if "x_passphrase" in wifi["configuration"]:
+            ssid = wifi["configuration"]["name"]
+            psk = wifi["configuration"]["x_passphrase"]
+
+
+qr = qrcode.QRCode()
+qr.add_data("WIFI:T:WPA;S:{};P:{};;".format(ssid, psk))
+
+if args.outputtype == 'text':
+    if not args.output:
+        print("\nWiFi Network Name: {}\nWiFi Password: {}\n\n".format(ssid, psk))
+        qr.print_tty()
+    else:
+        f = io.StringIO()
+        qr.print_ascii(out=f)
+        f.seek(0)
+        with open(args.output, 'w') as outfilehandle:
+            outfilehandle.write(f.read)
+
+elif args.outputtype == 'image':
+    if not args.output:
+        print('You need to supply an image filename')
+    else:
+        qr.make_image().save(args.output)
+
+
+elif args.outputtype == 'html':
+    buffer = io.BytesIO()
+    qr.make_image().save(buffer, format='PNG')
+    buffer.seek(0)
+    data_uri = base64.b64encode(buffer.read()).decode('ascii')
+    html = '<html><head></head><body>'
+    html += '<img src="data:image/png;base64,{0}">'.format(data_uri)
+    html += '</body></html>'
+
+    if not args.output:
+        print(html)
+    else:
+        with open(args.output, 'w') as outfilehandle:
+            outfilehandle.write(html)
+
+else:
+    print('outputtype {} is not known'.format(args.outputtype))

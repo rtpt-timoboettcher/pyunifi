@@ -1,5 +1,5 @@
-#!/usr/bin/env python
-  
+#!/usr/bin/env python3
+
 import argparse
 import json
 
@@ -15,13 +15,18 @@ parser.add_argument('-s', '--siteid', default='default', help='the source site I
 parser.add_argument('-S', '--siteid2', default='', help='the destination site ID, to copy to')
 parser.add_argument('-V', '--no-ssl-verify', default=False, action='store_true', help='Don\'t verify ssl certificates')
 parser.add_argument('-C', '--certificate', default='', help='verify with ssl certificate pem file')
+parser.add_argument('-d', '--debug', default=False, help='enable debug output', action='store_true')
 args = parser.parse_args()
 
 ssl_verify = (not args.no_ssl_verify)
 
 if ssl_verify and len(args.certificate) > 0:
         ssl_verify = args.certificate
-        
+
+if args.debug:
+    import logging
+    logging.basicConfig(level=logging.DEBUG)
+
 controller_source = Controller(args.controller, args.username, args.password, args.port, args.version, args.siteid,  ssl_verify=ssl_verify)
 controller_dest   = Controller(args.controller, args.username, args.password, args.port, args.version, args.siteid2, ssl_verify=ssl_verify)
 

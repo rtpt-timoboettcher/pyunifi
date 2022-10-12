@@ -1,4 +1,4 @@
-#!/usr/bin/env python
+#!/usr/bin/env python3
 
 import argparse
 
@@ -13,12 +13,17 @@ parser.add_argument('-v', '--version', default='v5', help='the controller base v
 parser.add_argument('-s', '--siteid', default='default', help='the site ID, UniFi >=3.x only (default "default")')
 parser.add_argument('-V', '--no-ssl-verify', default=False, action='store_true', help='Don\'t verify ssl certificates')
 parser.add_argument('-C', '--certificate', default='', help='verify with ssl certificate pem file')
+parser.add_argument('-d', '--debug', default=False, help='enable debug output', action='store_true')
 args = parser.parse_args()
 
 ssl_verify = (not args.no_ssl_verify)
 
 if ssl_verify and len(args.certificate) > 0:
         ssl_verify = args.certificate
+
+if args.debug:
+    import logging
+    logging.basicConfig(level=logging.DEBUG)
 
 c = Controller(args.controller, args.username, args.password, args.port, args.version, args.siteid, ssl_verify=ssl_verify)
 
@@ -34,5 +39,5 @@ def format_code(string):
         return first_half + '-' + second_half
 
 voucher_code = format_code(code)
-        
+
 print(voucher_code)

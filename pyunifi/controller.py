@@ -107,7 +107,7 @@ class Controller:  # pylint: disable=R0902,R0904
             raise APIError("%s controllers no longer supported" % version)
 
         if ssl_verify is False:
-            warnings.simplefilter("default", category=InsecureRequestWarning)
+            warnings.simplefilter("ignore", category=InsecureRequestWarning)
 
         self.log.debug("Controller for %s", self.url)
         self._login()
@@ -128,6 +128,9 @@ class Controller:  # pylint: disable=R0902,R0904
     def _api_url(self):
         return self.url + "api/s/" + self.site_id + "/"
 
+    def _api2_url(self):
+        return self.url + "v2/api/site/" + self.site_id + "/"
+
     @retry_login
     def _read(self, url, params=None):
         # Try block to handle the unifi server being offline.
@@ -138,8 +141,13 @@ class Controller:  # pylint: disable=R0902,R0904
 
         return self._jsondec(response.text)
 
-    def _api_read(self, url, params=None):
-        return self._read(self._api_url() + url, params)
+    def _api_read(self, url, version=1, params=None):
+        if version == 1:
+            return self._read(self._api_url() + url, params)
+        elif version == 2:
+            return self._read(self._api2_url() + url, params)
+        else:
+            raise NotImplementedError("Protocol version {} not known (yet)".format(version))
 
     @retry_login
     def _write(self, url, params=None):
@@ -150,8 +158,13 @@ class Controller:  # pylint: disable=R0902,R0904
 
         return self._jsondec(response.text)
 
-    def _api_write(self, url, params=None):
-        return self._write(self._api_url() + url, params)
+    def _api_write(self, url, version=1, params=None):
+        if version == 1:
+            return self._write(self._api_url() + url, params)
+        elif version == 2:
+            return self._write(self._api2_url() + url, params)
+        else:
+            raise NotImplementedError("Protocol version {} not known (yet)".format(version))
 
     @retry_login
     def _update(self, url, params=None):
@@ -162,8 +175,13 @@ class Controller:  # pylint: disable=R0902,R0904
 
         return self._jsondec(response.text)
 
-    def _api_update(self, url, params=None):
-        return self._update(self._api_url() + url, params)
+    def _api_update(self, url, version=1, params=None):
+        if version == 1:
+            return self._update(self._api_url() + url, params)
+        elif version == 2:
+            return self._update(self._api2_url() + url, params)
+        else:
+            raise NotImplementedError("Protocol version {} not known (yet)".format(version))
 
     @retry_login
     def _delete(self, url, params=None):
@@ -360,6 +378,13 @@ class Controller:  # pylint: disable=R0902,R0904
         """
         return self._api_delete('rest/account/' + user_id)
 
+    def get_wifi(self):
+        return self._api_read('wlan/enriched-configuration', version=2)
+
+    def set_wifi(self, wifi_id, params):
+        return self._api_update('rest/wlanconf/' + wifi_id, version=1, params=params)
+
+
     def get_switch_port_overrides(self, target_mac):
         """Gets a list of port overrides, in dictionary
         format, for the given target MAC address. The
@@ -543,13 +568,20 @@ class Controller:  # pylint: disable=R0902,R0904
             raise APIError(
                 "Controller version not supported: %s" % self.version
                 )
-
-        res = self._run_command(
-            "backup",
-            mgr="system",
-            params={"days": days}
-            )
-        return res[0]["url"]
+        elif self.version == "v5":
+            res = self._run_command(
+                "backup",
+                mgr="backup",
+                params={"days": days, "cmd": "backup"}
+                )
+            return res[0]["url"]
+        else:
+            res = self._run_command(
+                "backup",
+                mgr="system",
+                params={"days": days}
+                )
+            return res[0]["url"]
 
     # TODO: Not currently supported on UDMP as it now utilizes async-backups.
     def get_backup(self, download_path=None, target_file="unifi-backup.unf"):
@@ -569,7 +601,7 @@ class Controller:  # pylint: disable=R0902,R0904
 
         response = self.session.get(self.url + download_path, stream=True)
 
-        if response != 200:
+        if response.status_code != 200:
             raise APIError("API backup failed: %i" % response.status_code)
 
         with open(target_file, "wb") as _backfh:

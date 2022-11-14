@@ -1,0 +1,50 @@
+#!/usr/bin/env python3
+
+import argparse
+import os
+
+from pyunifi.controller import Controller
+
+def credFromCredsDir(credname):
+    if "CREDENTIALS_DIRECTORY" in os.environ.keys():
+        credfilename = os.path.join(os.environ["CREDENTIALS_DIRECTORY"], credname)
+        try:
+            with open(credfilename, 'r') as credfile:
+                cred = credfile.read().rstrip()
+        except:
+            sys.stderr.write("Could not read cred {} from {}".format(credname, credfilename))
+            sys.exit(2)
+    else:
+        sys.stderr.write("CREDENTIALS_DIRECTORY environment not provided")
+        sys.exit(1)
+    return cred
+
+parser = argparse.ArgumentParser()
+parser.add_argument('-c', '--controller', default='unifi', help='the controller address (default "unifi")')
+parser.add_argument('-u', '--username', default='admin', help='the controller username (default("admin")')
+parser.add_argument('-p', '--password', default='', help='the controller password')
+parser.add_argument('-b', '--port', default='8443', help='the controller port (default "8443")')
+parser.add_argument('-v', '--version', default='v5', help='the controller base version (default "v5")')
+parser.add_argument('-s', '--siteid', default='default', help='the site ID, UniFi >=3.x only (default "default")')
+parser.add_argument('-d', '--debug', default=False, help='enable debug output', action='store_true')
+parser.add_argument('-V', '--no-ssl-verify', default=False, action='store_true', help='Don\'t verify ssl certificates')
+parser.add_argument('-C', '--certificate', default='', help='verify with ssl certificate pem file')
+args = parser.parse_args()
+
+ssl_verify = (not args.no_ssl_verify)
+
+if ssl_verify and len(args.certificate) > 0:
+    ssl_verify = args.certificate
+
+if args.debug:
+    import logging
+    logging.basicConfig(level=logging.DEBUG)
+
+apipassword = args.password
+if not apipassword:
+    apipassword = credFromCredsDir("api-password")
+
+c = Controller(args.controller, args.username, apipassword, args.port, args.version, args.siteid, ssl_verify=ssl_verify)
+
+targetfile = c.get_last_autobackup()
+print("Got backup {}".format(targetfile))

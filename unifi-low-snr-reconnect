@@ -26,7 +26,7 @@ args = parser.parse_args()
 ssl_verify = (not args.no_ssl_verify)
 
 if ssl_verify and len(args.certificate) > 0:
-        ssl_verify = args.certificate
+    ssl_verify = args.certificate
 
 if args.debug:
     import logging
